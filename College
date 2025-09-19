@@ -1,0 +1,455 @@
+backend/
+ ├── go.mod
+ ├── main.go
+ ├── models/
+ │     └── models.go
+ ├── handlers/
+ │     ├── auth.go
+ │     ├── transaction.go
+ │     ├── bank.go
+ │     ├── billing.go
+ └── utils/
+       ├── cookie.go
+       └── cors.go
+
+
+📄 models/models.go
+
+package models
+
+import "time"
+
+// Audit fields (WhosCol)
+type Audit struct {
+    CreatedBy string    `json:"created_by"`
+    UpdatedBy string    `json:"updated_by"`
+    CreatedAt time.Time `json:"created_at"`
+    UpdatedAt time.Time `json:"updated_at"`
+}
+
+// User
+type User struct {
+    ID     int    `json:"id"`
+    Name   string `json:"name"`
+    MobNo  int64  `json:"mob_no"`
+    Email  string `json:"email"`
+    Status string `json:"status"` // A=Active, I=Inactive, P=Pending, O=Open, R=Reject, M=Admin
+    Audit
+}
+
+// Personal
+type Personal struct {
+    ID              int    `json:"id"`
+    UID             int    `json:"uid"`
+    FName           string `json:"fname"`
+    MName           string `json:"mname"`
+    LName           string `json:"lname"`
+    Country         string `json:"country"`
+    State           string `json:"state"`
+    City            string `json:"city"`
+    Pincode         int    `json:"pincode"`
+    Address         string `json:"address"`
+    SelectedSegment string `json:"selected_segment"`
+    FilePath        string `json:"file_path"`
+    Audit
+}
+
+// Bank
+type Bank struct {
+    ID    int    `json:"id"`
+    UID   int    `json:"uid"`
+    IFSC  string `json:"ifsc"`
+    AccNo int64  `json:"acc_no"`
+    Audit
+}
+
+// Session
+type Session struct {
+    ID        int       `json:"id"`
+    UID       int       `json:"uid"`
+    RequestID string    `json:"request_id"`
+    Expire    time.Time `json:"expire_date"`
+    Audit
+}
+
+// Transaction
+type Transaction struct {
+    ID     int     `json:"id"`
+    UID    int     `json:"uid"`
+    Amount float64 `json:"amount"`
+    Status string  `json:"status"` // C=Credit, D=Debit
+    Audit
+}
+
+// Share
+type Share struct {
+    ID          int    `json:"id"`
+    SegmentName string `json:"segment_name"`
+    ShareName   string `json:"share_name"`
+    SharePrice  int    `json:"share_price"`
+    Audit
+}
+
+// Trade
+type Trade struct {
+    ID          int    `json:"id"`
+    UID         int    `json:"uid"`
+    ShareID     int    `json:"share_id"`
+    Status      string `json:"status"`
+    QAmount     int    `json:"qamount"`
+    TradeStatus string `json:"trade_status"` // H=Hold, S=Sell
+    Audit
+}
+
+
+---
+
+📄 utils/cookie.go
+
+package utils
+
+import (
+    "net/http"
+)
+
+// Middleware: check cookie before allowing API access
+func WithCookie(next http.HandlerFunc) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        cookie, err := r.Cookie("session_id")
+        if err != nil || cookie.Value == "" {
+            w.WriteHeader(http.StatusUnauthorized)
+            w.Write([]byte(`{"success":false,"message":"Unauthorized - login required"}`))
+            return
+        }
+        next(w, r)
+    }
+}
+
+
+---
+
+📄 utils/cors.go
+
+package utils
+
+import "net/http"
+
+// CORS middleware for Vue.js frontend
+func EnableCORS(next http.HandlerFunc) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("Access-Control-Allow-Origin", "*")
+        w.Header().Set("Access-Control-Allow-Credentials", "false")
+        w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+        w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+        if r.Method == http.MethodOptions {
+            w.WriteHeader(http.StatusOK)
+            return
+        }
+
+        next(w, r)
+    }
+}
+
+
+---
+
+📄 handlers/auth.go
+
+package handlers
+
+import (
+    "backend/models"
+    "encoding/json"
+    "math/rand"
+    "net/http"
+    "strconv"
+    "time"
+)
+
+type LoginRequest struct {
+    Email string `json:"email"`
+    MobNo int64  `json:"mob_no"`
+}
+
+type LoginResponse struct {
+    Success bool   `json:"success"`
+    Message string `json:"message"`
+}
+
+// Generate random requestID
+func randomID() string {
+    return strconv.Itoa(rand.Intn(1000000))
+}
+
+func Login(w http.ResponseWriter, r *http.Request) {
+    var req LoginRequest
+    json.NewDecoder(r.Body).Decode(&req)
+
+    if req.Email == "" || req.MobNo == 0 {
+        json.NewEncoder(w).Encode(LoginResponse{Success: false, Message: "Email and Mobile No are required"})
+        return
+    }
+
+    db := ftdb.GRMMariaFTPRDDB
+
+    var user models.User
+    result := db.Where("email = ? AND mob_no = ?", req.Email, req.MobNo).First(&user)
+    if result.Error != nil || user.ID == 0 {
+        json.NewEncoder(w).Encode(LoginResponse{Success: false, Message: "Invalid credentials"})
+        return
+    }
+
+    session := models.Session{
+        UID:       user.ID,
+        RequestID: randomID(),
+        Expire:    time.Now().Add(24 * time.Hour),
+        Audit: models.Audit{
+            CreatedBy: "system",
+            UpdatedBy: "system",
+            CreatedAt: time.Now(),
+            UpdatedAt: time.Now(),
+        },
+    }
+    db.Create(&session)
+
+    cookie := http.Cookie{
+        Name:    "session_id",
+        Value:   session.RequestID,
+        Expires: session.Expire,
+        Path:    "/",
+    }
+    http.SetCookie(w, &cookie)
+
+    json.NewEncoder(w).Encode(LoginResponse{Success: true, Message: "Login successful"})
+}
+
+
+---
+
+📄 handlers/transaction.go
+
+package handlers
+
+import (
+    "backend/models"
+    "encoding/json"
+    "net/http"
+    "time"
+)
+
+type FundRequest struct {
+    UID    int     `json:"uid"`
+    Amount float64 `json:"amount"`
+}
+
+type FundResponse struct {
+    Success bool   `json:"success"`
+    Message string `json:"message"`
+}
+
+func AddFund(w http.ResponseWriter, r *http.Request) {
+    var req FundRequest
+    json.NewDecoder(r.Body).Decode(&req)
+
+    if req.Amount <= 0 {
+        json.NewEncoder(w).Encode(FundResponse{Success: false, Message: "Amount must be greater than 0"})
+        return
+    }
+    if req.Amount > 5000 {
+        json.NewEncoder(w).Encode(FundResponse{Success: false, Message: "Max Add Fund is 5000"})
+        return
+    }
+
+    db := ftdb.GRMMariaFTPRDDB
+    txn := models.Transaction{
+        UID:    req.UID,
+        Amount: req.Amount,
+        Status: "C",
+        Audit: models.Audit{
+            CreatedBy: "system",
+            UpdatedBy: "system",
+            CreatedAt: time.Now(),
+            UpdatedAt: time.Now(),
+        },
+    }
+    db.Create(&txn)
+
+    json.NewEncoder(w).Encode(FundResponse{Success: true, Message: "Fund Added Successfully"})
+}
+
+func Withdraw(w http.ResponseWriter, r *http.Request) {
+    var req FundRequest
+    json.NewDecoder(r.Body).Decode(&req)
+
+    if req.Amount <= 0 {
+        json.NewEncoder(w).Encode(FundResponse{Success: false, Message: "Amount must be greater than 0"})
+        return
+    }
+    if req.Amount > 2000 {
+        json.NewEncoder(w).Encode(FundResponse{Success: false, Message: "Max Withdraw is 2000"})
+        return
+    }
+
+    db := ftdb.GRMMariaFTPRDDB
+    txn := models.Transaction{
+        UID:    req.UID,
+        Amount: req.Amount,
+        Status: "D",
+        Audit: models.Audit{
+            CreatedBy: "system",
+            UpdatedBy: "system",
+            CreatedAt: time.Now(),
+            UpdatedAt: time.Now(),
+        },
+    }
+    db.Create(&txn)
+
+    json.NewEncoder(w).Encode(FundResponse{Success: true, Message: "Withdraw Successful"})
+}
+
+
+---
+
+📄 handlers/bank.go
+
+package handlers
+
+import (
+    "backend/models"
+    "encoding/json"
+    "net/http"
+    "time"
+)
+
+type IFSCRequest struct {
+    UID   int    `json:"uid"`
+    IFSC  string `json:"ifsc"`
+    AccNo int64  `json:"acc_no"`
+}
+
+type IFSCResponse struct {
+    Success bool   `json:"success"`
+    Bank    string `json:"bank"`
+    Branch  string `json:"branch"`
+    Error   string `json:"error,omitempty"`
+}
+
+func ValidateIFSC(w http.ResponseWriter, r *http.Request) {
+    var req IFSCRequest
+    json.NewDecoder(r.Body).Decode(&req)
+
+    if req.IFSC == "" || req.AccNo == 0 {
+        json.NewEncoder(w).Encode(IFSCResponse{Success: false, Error: "IFSC and AccNo required"})
+        return
+    }
+
+    url := "https://ifsc.razorpay.com/" + req.IFSC
+    resp, err := http.Get(url)
+    if err != nil || resp.StatusCode != 200 {
+        json.NewEncoder(w).Encode(IFSCResponse{Success: false, Error: "Invalid IFSC"})
+        return
+    }
+    defer resp.Body.Close()
+
+    var result map[string]string
+    json.NewDecoder(resp.Body).Decode(&result)
+
+    db := ftdb.GRMMariaFTPRDDB
+    bank := models.Bank{
+        UID:   req.UID,
+        IFSC:  req.IFSC,
+        AccNo: req.AccNo,
+        Audit: models.Audit{
+            CreatedBy: "system",
+            UpdatedBy: "system",
+            CreatedAt: time.Now(),
+            UpdatedAt: time.Now(),
+        },
+    }
+    db.Create(&bank)
+
+    json.NewEncoder(w).Encode(IFSCResponse{
+        Success: true,
+        Bank:    result["BANK"],
+        Branch:  result["BRANCH"],
+    })
+}
+
+
+---
+
+📄 handlers/billing.go
+
+package handlers
+
+import (
+    "backend/models"
+    "encoding/csv"
+    "net/http"
+    "strconv"
+)
+
+func ExportCSV(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "text/csv")
+    w.Header().Set("Content-Disposition", "attachment;filename=transactions.csv")
+
+    writer := csv.NewWriter(w)
+    defer writer.Flush()
+
+    writer.Write([]string{"ID", "UID", "Amount", "Status", "CreatedAt"})
+
+    db := ftdb.GRMMariaFTPRDDB
+    var txns []models.Transaction
+    db.Find(&txns)
+
+    for _, t := range txns {
+        writer.Write([]string{
+            strconv.Itoa(t.ID),
+            strconv.Itoa(t.UID),
+            strconv.FormatFloat(t.Amount, 'f', 2, 64),
+            t.Status,
+            t.CreatedAt.Format("2006-01-02 15:04:05"),
+        })
+    }
+}
+
+
+---
+
+📄 main.go (with CORS + Cookies)
+
+package main
+
+import (
+    "backend/handlers"
+    "backend/utils"
+    "log"
+    "net/http"
+)
+
+func MariaDBConnection() {
+    err := ftdb.OpenDBConnection("192.168.2.5", "ST1006", "Best@123@123", "training", "mysql", "3306")
+    if err != nil {
+        log.Println("Failed to connect to DB", err)
+        return
+    }
+    dbInfo := ftdb.GRMMariaFTPRDDB
+    _ = dbInfo
+}
+
+func main() {
+    MariaDBConnection()
+
+    http.HandleFunc("/login", utils.EnableCORS(handlers.Login))
+    http.HandleFunc("/add-fund", utils.EnableCORS(utils.WithCookie(handlers.AddFund)))
+    http.HandleFunc("/withdraw", utils.EnableCORS(utils.WithCookie(handlers.Withdraw)))
+    http.HandleFunc("/validate-ifsc", utils.EnableCORS(utils.WithCookie(handlers.ValidateIFSC)))
+    http.HandleFunc("/billing/export", utils.EnableCORS(utils.WithCookie(handlers.ExportCSV)))
+
+    log.Println("Server started at :8080")
+    log.Fatal(http.ListenAndServe(":8080", nil))
+}
+
+
+---
