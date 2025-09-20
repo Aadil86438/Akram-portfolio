@@ -1,16 +1,22 @@
-backend/
+final/
  ├── go.mod
+ ├── go.sum
  ├── main.go
- ├── models/
- │     └── models.go
  ├── handlers/
  │     ├── auth.go
- │     ├── transaction.go
  │     ├── bank.go
  │     ├── billing.go
+ │     ├── transaction.go
+ │     ├── personal.go
+ │     ├── dashboard.go
+ │     ├── trading.go
+ │     └── admin.go
+ ├── models/
+ │     └── models.go
  └── utils/
-       ├── cookie.go
+       ├── cookies.go
        └── cors.go
+
 
 
 📄 models/models.go
@@ -19,7 +25,7 @@ package models
 
 import "time"
 
-// Audit fields (WhosCol)
+// Audit fields
 type Audit struct {
     CreatedBy string    `json:"created_by"`
     UpdatedBy string    `json:"updated_by"`
@@ -33,33 +39,33 @@ type User struct {
     Name   string `json:"name"`
     MobNo  int64  `json:"mob_no"`
     Email  string `json:"email"`
-    Status string `json:"status"` // A=Active, I=Inactive, P=Pending, O=Open, R=Reject, M=Admin
+    Status string `json:"status"`
     Audit
 }
 
 // Personal
 type Personal struct {
-    ID              int    `json:"id"`
-    UID             int    `json:"uid"`
-    FName           string `json:"fname"`
-    MName           string `json:"mname"`
-    LName           string `json:"lname"`
-    Country         string `json:"country"`
-    State           string `json:"state"`
-    City            string `json:"city"`
-    Pincode         int    `json:"pincode"`
-    Address         string `json:"address"`
-    SelectedSegment string `json:"selected_segment"`
-    FilePath        string `json:"file_path"`
+    ID      int    `json:"id"`
+    UID     int    `json:"uid"`
+    FName   string `json:"fname"`
+    MName   string `json:"mname"`
+    LName   string `json:"lname"`
+    Country string `json:"country"`
+    State   string `json:"state"`
+    City    string `json:"city"`
+    Pincode int    `json:"pincode"`
+    Address string `json:"address"`
     Audit
 }
 
-// Bank
+// Bank (corrected with SelectedSegments + FilePath)
 type Bank struct {
-    ID    int    `json:"id"`
-    UID   int    `json:"uid"`
-    IFSC  string `json:"ifsc"`
-    AccNo int64  `json:"acc_no"`
+    ID               int    `json:"id"`
+    UID              int    `json:"uid"`
+    IFSC             string `json:"ifsc"`
+    AccNo            int64  `json:"acc_no"`
+    SelectedSegments string `json:"selected_segments"`
+    FilePath         string `json:"file_path"`
     Audit
 }
 
@@ -97,22 +103,19 @@ type Trade struct {
     ShareID     int    `json:"share_id"`
     Status      string `json:"status"`
     QAmount     int    `json:"qamount"`
-    TradeStatus string `json:"trade_status"` // H=Hold, S=Sell
+    TradeStatus string `json:"trade_status"`
     Audit
 }
 
 
 ---
 
-📄 utils/cookie.go
+📄 utils/cookies.go
 
 package utils
 
-import (
-    "net/http"
-)
+import "net/http"
 
-// Middleware: check cookie before allowing API access
 func WithCookie(next http.HandlerFunc) http.HandlerFunc {
     return func(w http.ResponseWriter, r *http.Request) {
         cookie, err := r.Cookie("session_id")
@@ -134,7 +137,6 @@ package utils
 
 import "net/http"
 
-// CORS middleware for Vue.js frontend
 func EnableCORS(next http.HandlerFunc) http.HandlerFunc {
     return func(w http.ResponseWriter, r *http.Request) {
         w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -159,12 +161,14 @@ func EnableCORS(next http.HandlerFunc) http.HandlerFunc {
 package handlers
 
 import (
-    "backend/models"
     "encoding/json"
+    "log"
     "math/rand"
     "net/http"
     "strconv"
     "time"
+
+    "final/models"
 )
 
 type LoginRequest struct {
@@ -177,7 +181,6 @@ type LoginResponse struct {
     Message string `json:"message"`
 }
 
-// Generate random requestID
 func randomID() string {
     return strconv.Itoa(rand.Intn(1000000))
 }
@@ -187,14 +190,14 @@ func Login(w http.ResponseWriter, r *http.Request) {
     json.NewDecoder(r.Body).Decode(&req)
 
     if req.Email == "" || req.MobNo == 0 {
-        json.NewEncoder(w).Encode(LoginResponse{Success: false, Message: "Email and Mobile No are required"})
+        json.NewEncoder(w).Encode(LoginResponse{Success: false, Message: "Email and Mobile No required"})
         return
     }
 
     db := ftdb.GRMMariaFTPRDDB
 
     var user models.User
-    result := db.Where("email = ? AND mob_no = ?", req.Email, req.MobNo).First(&user)
+    result := db.Table("st1006_user").Where("email = ? AND mob_no = ?", req.Email, req.MobNo).First(&user)
     if result.Error != nil || user.ID == 0 {
         json.NewEncoder(w).Encode(LoginResponse{Success: false, Message: "Invalid credentials"})
         return
@@ -211,7 +214,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
             UpdatedAt: time.Now(),
         },
     }
-    db.Create(&session)
+    db.Table("st1006_session").Create(&session)
 
     cookie := http.Cookie{
         Name:    "session_id",
@@ -221,6 +224,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
     }
     http.SetCookie(w, &cookie)
 
+    log.Println("User logged in:", user.Email)
     json.NewEncoder(w).Encode(LoginResponse{Success: true, Message: "Login successful"})
 }
 
@@ -232,10 +236,11 @@ func Login(w http.ResponseWriter, r *http.Request) {
 package handlers
 
 import (
-    "backend/models"
     "encoding/json"
     "net/http"
     "time"
+
+    "final/models"
 )
 
 type FundRequest struct {
@@ -273,7 +278,7 @@ func AddFund(w http.ResponseWriter, r *http.Request) {
             UpdatedAt: time.Now(),
         },
     }
-    db.Create(&txn)
+    db.Table("st1006_transaction").Create(&txn)
 
     json.NewEncoder(w).Encode(FundResponse{Success: true, Message: "Fund Added Successfully"})
 }
@@ -303,7 +308,7 @@ func Withdraw(w http.ResponseWriter, r *http.Request) {
             UpdatedAt: time.Now(),
         },
     }
-    db.Create(&txn)
+    db.Table("st1006_transaction").Create(&txn)
 
     json.NewEncoder(w).Encode(FundResponse{Success: true, Message: "Withdraw Successful"})
 }
@@ -316,16 +321,19 @@ func Withdraw(w http.ResponseWriter, r *http.Request) {
 package handlers
 
 import (
-    "backend/models"
     "encoding/json"
     "net/http"
     "time"
+
+    "final/models"
 )
 
 type IFSCRequest struct {
-    UID   int    `json:"uid"`
-    IFSC  string `json:"ifsc"`
-    AccNo int64  `json:"acc_no"`
+    UID              int    `json:"uid"`
+    IFSC             string `json:"ifsc"`
+    AccNo            int64  `json:"acc_no"`
+    SelectedSegments string `json:"selected_segments"`
+    FilePath         string `json:"file_path"`
 }
 
 type IFSCResponse struct {
@@ -357,9 +365,11 @@ func ValidateIFSC(w http.ResponseWriter, r *http.Request) {
 
     db := ftdb.GRMMariaFTPRDDB
     bank := models.Bank{
-        UID:   req.UID,
-        IFSC:  req.IFSC,
-        AccNo: req.AccNo,
+        UID:              req.UID,
+        IFSC:             req.IFSC,
+        AccNo:            req.AccNo,
+        SelectedSegments: req.SelectedSegments,
+        FilePath:         req.FilePath,
         Audit: models.Audit{
             CreatedBy: "system",
             UpdatedBy: "system",
@@ -367,7 +377,7 @@ func ValidateIFSC(w http.ResponseWriter, r *http.Request) {
             UpdatedAt: time.Now(),
         },
     }
-    db.Create(&bank)
+    db.Table("st1006_bank").Create(&bank)
 
     json.NewEncoder(w).Encode(IFSCResponse{
         Success: true,
@@ -384,10 +394,11 @@ func ValidateIFSC(w http.ResponseWriter, r *http.Request) {
 package handlers
 
 import (
-    "backend/models"
     "encoding/csv"
     "net/http"
     "strconv"
+
+    "final/models"
 )
 
 func ExportCSV(w http.ResponseWriter, r *http.Request) {
@@ -401,7 +412,7 @@ func ExportCSV(w http.ResponseWriter, r *http.Request) {
 
     db := ftdb.GRMMariaFTPRDDB
     var txns []models.Transaction
-    db.Find(&txns)
+    db.Table("st1006_transaction").Find(&txns)
 
     for _, t := range txns {
         writer.Write([]string{
@@ -417,13 +428,456 @@ func ExportCSV(w http.ResponseWriter, r *http.Request) {
 
 ---
 
-📄 main.go (with CORS + Cookies)
+📄 main.go
 
 package main
 
 import (
-    "backend/handlers"
-    "backend/utils"
+    "final/handlers"
+    "final/utils"
+    "log"
+    "net/http"
+)
+
+func MariaDBConnection() {
+    err := ftdb.OpenDBConnection("192.168.2.5", "ST1006", "Best@123@123", "training", "mysql", "3306")
+    if err != nil {
+        log.Println("Failed to connect to DB", err)
+        return
+    }
+    dbInfo := ftdb.GRMMariaFTPRDDB
+    _ = dbInfo
+}
+
+func main() {
+    MariaDBConnection()
+
+    http.HandleFunc("/login", utils.EnableCORS(handlers.Login))
+    http.HandleFunc("/add-fund", utils.EnableCORS(utils.WithCookie(handlers.AddFund)))
+    http.HandleFunc("/withdraw", utils.EnableCORS(utils.WithCookie(handlers.Withdraw)))
+    http.HandleFunc("/validate-ifsc", utils.EnableCORS(utils.WithCookie(handlers.ValidateIFSC)))
+    http.HandleFunc("/billing/export", utils.EnableCORS(utils.WithCookie(handlers.ExportCSV)))
+
+    log.Println("Server started at :8080")
+    log.Fatal(http.ListenAndServe(":8080", nil))
+}
+
+📄 models/models.go
+
+package models
+
+import "time"
+
+// Audit fields
+type Audit struct {
+    CreatedBy string    `json:"created_by"`
+    UpdatedBy string    `json:"updated_by"`
+    CreatedAt time.Time `json:"created_at"`
+    UpdatedAt time.Time `json:"updated_at"`
+}
+
+// User
+type User struct {
+    ID     int    `json:"id"`
+    Name   string `json:"name"`
+    MobNo  int64  `json:"mob_no"`
+    Email  string `json:"email"`
+    Status string `json:"status"`
+    Audit
+}
+
+// Personal
+type Personal struct {
+    ID      int    `json:"id"`
+    UID     int    `json:"uid"`
+    FName   string `json:"fname"`
+    MName   string `json:"mname"`
+    LName   string `json:"lname"`
+    Country string `json:"country"`
+    State   string `json:"state"`
+    City    string `json:"city"`
+    Pincode int    `json:"pincode"`
+    Address string `json:"address"`
+    Audit
+}
+
+// Bank (corrected with SelectedSegments + FilePath)
+type Bank struct {
+    ID               int    `json:"id"`
+    UID              int    `json:"uid"`
+    IFSC             string `json:"ifsc"`
+    AccNo            int64  `json:"acc_no"`
+    SelectedSegments string `json:"selected_segments"`
+    FilePath         string `json:"file_path"`
+    Audit
+}
+
+// Session
+type Session struct {
+    ID        int       `json:"id"`
+    UID       int       `json:"uid"`
+    RequestID string    `json:"request_id"`
+    Expire    time.Time `json:"expire_date"`
+    Audit
+}
+
+// Transaction
+type Transaction struct {
+    ID     int     `json:"id"`
+    UID    int     `json:"uid"`
+    Amount float64 `json:"amount"`
+    Status string  `json:"status"` // C=Credit, D=Debit
+    Audit
+}
+
+// Share
+type Share struct {
+    ID          int    `json:"id"`
+    SegmentName string `json:"segment_name"`
+    ShareName   string `json:"share_name"`
+    SharePrice  int    `json:"share_price"`
+    Audit
+}
+
+// Trade
+type Trade struct {
+    ID          int    `json:"id"`
+    UID         int    `json:"uid"`
+    ShareID     int    `json:"share_id"`
+    Status      string `json:"status"`
+    QAmount     int    `json:"qamount"`
+    TradeStatus string `json:"trade_status"`
+    Audit
+}
+
+
+---
+
+📄 utils/cookies.go
+
+package utils
+
+import "net/http"
+
+func WithCookie(next http.HandlerFunc) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        cookie, err := r.Cookie("session_id")
+        if err != nil || cookie.Value == "" {
+            w.WriteHeader(http.StatusUnauthorized)
+            w.Write([]byte(`{"success":false,"message":"Unauthorized - login required"}`))
+            return
+        }
+        next(w, r)
+    }
+}
+
+
+---
+
+📄 utils/cors.go
+
+package utils
+
+import "net/http"
+
+func EnableCORS(next http.HandlerFunc) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("Access-Control-Allow-Origin", "*")
+        w.Header().Set("Access-Control-Allow-Credentials", "false")
+        w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+        w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+        if r.Method == http.MethodOptions {
+            w.WriteHeader(http.StatusOK)
+            return
+        }
+
+        next(w, r)
+    }
+}
+
+
+---
+
+📄 handlers/auth.go
+
+package handlers
+
+import (
+    "encoding/json"
+    "log"
+    "math/rand"
+    "net/http"
+    "strconv"
+    "time"
+
+    "final/models"
+)
+
+type LoginRequest struct {
+    Email string `json:"email"`
+    MobNo int64  `json:"mob_no"`
+}
+
+type LoginResponse struct {
+    Success bool   `json:"success"`
+    Message string `json:"message"`
+}
+
+func randomID() string {
+    return strconv.Itoa(rand.Intn(1000000))
+}
+
+func Login(w http.ResponseWriter, r *http.Request) {
+    var req LoginRequest
+    json.NewDecoder(r.Body).Decode(&req)
+
+    if req.Email == "" || req.MobNo == 0 {
+        json.NewEncoder(w).Encode(LoginResponse{Success: false, Message: "Email and Mobile No required"})
+        return
+    }
+
+    db := ftdb.GRMMariaFTPRDDB
+
+    var user models.User
+    result := db.Table("st1006_user").Where("email = ? AND mob_no = ?", req.Email, req.MobNo).First(&user)
+    if result.Error != nil || user.ID == 0 {
+        json.NewEncoder(w).Encode(LoginResponse{Success: false, Message: "Invalid credentials"})
+        return
+    }
+
+    session := models.Session{
+        UID:       user.ID,
+        RequestID: randomID(),
+        Expire:    time.Now().Add(24 * time.Hour),
+        Audit: models.Audit{
+            CreatedBy: "system",
+            UpdatedBy: "system",
+            CreatedAt: time.Now(),
+            UpdatedAt: time.Now(),
+        },
+    }
+    db.Table("st1006_session").Create(&session)
+
+    cookie := http.Cookie{
+        Name:    "session_id",
+        Value:   session.RequestID,
+        Expires: session.Expire,
+        Path:    "/",
+    }
+    http.SetCookie(w, &cookie)
+
+    log.Println("User logged in:", user.Email)
+    json.NewEncoder(w).Encode(LoginResponse{Success: true, Message: "Login successful"})
+}
+
+
+---
+
+📄 handlers/transaction.go
+
+package handlers
+
+import (
+    "encoding/json"
+    "net/http"
+    "time"
+
+    "final/models"
+)
+
+type FundRequest struct {
+    UID    int     `json:"uid"`
+    Amount float64 `json:"amount"`
+}
+
+type FundResponse struct {
+    Success bool   `json:"success"`
+    Message string `json:"message"`
+}
+
+func AddFund(w http.ResponseWriter, r *http.Request) {
+    var req FundRequest
+    json.NewDecoder(r.Body).Decode(&req)
+
+    if req.Amount <= 0 {
+        json.NewEncoder(w).Encode(FundResponse{Success: false, Message: "Amount must be greater than 0"})
+        return
+    }
+    if req.Amount > 5000 {
+        json.NewEncoder(w).Encode(FundResponse{Success: false, Message: "Max Add Fund is 5000"})
+        return
+    }
+
+    db := ftdb.GRMMariaFTPRDDB
+    txn := models.Transaction{
+        UID:    req.UID,
+        Amount: req.Amount,
+        Status: "C",
+        Audit: models.Audit{
+            CreatedBy: "system",
+            UpdatedBy: "system",
+            CreatedAt: time.Now(),
+            UpdatedAt: time.Now(),
+        },
+    }
+    db.Table("st1006_transaction").Create(&txn)
+
+    json.NewEncoder(w).Encode(FundResponse{Success: true, Message: "Fund Added Successfully"})
+}
+
+func Withdraw(w http.ResponseWriter, r *http.Request) {
+    var req FundRequest
+    json.NewDecoder(r.Body).Decode(&req)
+
+    if req.Amount <= 0 {
+        json.NewEncoder(w).Encode(FundResponse{Success: false, Message: "Amount must be greater than 0"})
+        return
+    }
+    if req.Amount > 2000 {
+        json.NewEncoder(w).Encode(FundResponse{Success: false, Message: "Max Withdraw is 2000"})
+        return
+    }
+
+    db := ftdb.GRMMariaFTPRDDB
+    txn := models.Transaction{
+        UID:    req.UID,
+        Amount: req.Amount,
+        Status: "D",
+        Audit: models.Audit{
+            CreatedBy: "system",
+            UpdatedBy: "system",
+            CreatedAt: time.Now(),
+            UpdatedAt: time.Now(),
+        },
+    }
+    db.Table("st1006_transaction").Create(&txn)
+
+    json.NewEncoder(w).Encode(FundResponse{Success: true, Message: "Withdraw Successful"})
+}
+
+
+---
+
+📄 handlers/bank.go
+
+package handlers
+
+import (
+    "encoding/json"
+    "net/http"
+    "time"
+
+    "final/models"
+)
+
+type IFSCRequest struct {
+    UID              int    `json:"uid"`
+    IFSC             string `json:"ifsc"`
+    AccNo            int64  `json:"acc_no"`
+    SelectedSegments string `json:"selected_segments"`
+    FilePath         string `json:"file_path"`
+}
+
+type IFSCResponse struct {
+    Success bool   `json:"success"`
+    Bank    string `json:"bank"`
+    Branch  string `json:"branch"`
+    Error   string `json:"error,omitempty"`
+}
+
+func ValidateIFSC(w http.ResponseWriter, r *http.Request) {
+    var req IFSCRequest
+    json.NewDecoder(r.Body).Decode(&req)
+
+    if req.IFSC == "" || req.AccNo == 0 {
+        json.NewEncoder(w).Encode(IFSCResponse{Success: false, Error: "IFSC and AccNo required"})
+        return
+    }
+
+    url := "https://ifsc.razorpay.com/" + req.IFSC
+    resp, err := http.Get(url)
+    if err != nil || resp.StatusCode != 200 {
+        json.NewEncoder(w).Encode(IFSCResponse{Success: false, Error: "Invalid IFSC"})
+        return
+    }
+    defer resp.Body.Close()
+
+    var result map[string]string
+    json.NewDecoder(resp.Body).Decode(&result)
+
+    db := ftdb.GRMMariaFTPRDDB
+    bank := models.Bank{
+        UID:              req.UID,
+        IFSC:             req.IFSC,
+        AccNo:            req.AccNo,
+        SelectedSegments: req.SelectedSegments,
+        FilePath:         req.FilePath,
+        Audit: models.Audit{
+            CreatedBy: "system",
+            UpdatedBy: "system",
+            CreatedAt: time.Now(),
+            UpdatedAt: time.Now(),
+        },
+    }
+    db.Table("st1006_bank").Create(&bank)
+
+    json.NewEncoder(w).Encode(IFSCResponse{
+        Success: true,
+        Bank:    result["BANK"],
+        Branch:  result["BRANCH"],
+    })
+}
+
+
+---
+
+📄 handlers/billing.go
+
+package handlers
+
+import (
+    "encoding/csv"
+    "net/http"
+    "strconv"
+
+    "final/models"
+)
+
+func ExportCSV(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "text/csv")
+    w.Header().Set("Content-Disposition", "attachment;filename=transactions.csv")
+
+    writer := csv.NewWriter(w)
+    defer writer.Flush()
+
+    writer.Write([]string{"ID", "UID", "Amount", "Status", "CreatedAt"})
+
+    db := ftdb.GRMMariaFTPRDDB
+    var txns []models.Transaction
+    db.Table("st1006_transaction").Find(&txns)
+
+    for _, t := range txns {
+        writer.Write([]string{
+            strconv.Itoa(t.ID),
+            strconv.Itoa(t.UID),
+            strconv.FormatFloat(t.Amount, 'f', 2, 64),
+            t.Status,
+            t.CreatedAt.Format("2006-01-02 15:04:05"),
+        })
+    }
+}
+
+
+---
+
+📄 main.go
+
+package main
+
+import (
+    "final/handlers"
+    "final/utils"
     "log"
     "net/http"
 )
@@ -452,4 +906,326 @@ func main() {
 }
 
 
+
+final/
+ ├── go.mod
+ ├── go.sum
+ ├── main.go
+ ├── handlers/
+ │     ├── auth.go
+ │     ├── bank.go
+ │     ├── billing.go
+ │     ├── transaction.go
+ │     ├── personal.go
+ │     ├── dashboard.go
+ │     ├── trading.go
+ │     └── admin.go
+ ├── models/
+ │     └── models.go
+ └── utils/
+       ├── cookies.go
+       └── cors.go
+
+
+
+📄 handlers/personal.go
+
+package handlers
+
+import (
+    "encoding/json"
+    "net/http"
+    "time"
+
+    "final/models"
+)
+
+// Request for saving personal info
+type PersonalRequest struct {
+    UID     int    `json:"uid"`
+    FName   string `json:"fname"`
+    MName   string `json:"mname"`
+    LName   string `json:"lname"`
+    Country string `json:"country"`
+    State   string `json:"state"`
+    City    string `json:"city"`
+    Pincode int    `json:"pincode"`
+    Address string `json:"address"`
+}
+
+type PersonalResponse struct {
+    Success bool   `json:"success"`
+    Message string `json:"message"`
+}
+
+func SavePersonal(w http.ResponseWriter, r *http.Request) {
+    var req PersonalRequest
+    json.NewDecoder(r.Body).Decode(&req)
+
+    if req.FName == "" || req.LName == "" || req.Country == "" {
+        json.NewEncoder(w).Encode(PersonalResponse{Success: false, Message: "First Name, Last Name, Country required"})
+        return
+    }
+
+    db := ftdb.GRMMariaFTPRDDB
+    personal := models.Personal{
+        UID:     req.UID,
+        FName:   req.FName,
+        MName:   req.MName,
+        LName:   req.LName,
+        Country: req.Country,
+        State:   req.State,
+        City:    req.City,
+        Pincode: req.Pincode,
+        Address: req.Address,
+        Audit: models.Audit{
+            CreatedBy: "system",
+            UpdatedBy: "system",
+            CreatedAt: time.Now(),
+            UpdatedAt: time.Now(),
+        },
+    }
+    db.Table("st1006_personal").Create(&personal)
+
+    json.NewEncoder(w).Encode(PersonalResponse{Success: true, Message: "Personal Info Saved"})
+}
+
+
 ---
+
+📄 handlers/dashboard.go
+
+package handlers
+
+import (
+    "encoding/json"
+    "net/http"
+
+    "final/models"
+)
+
+type DashboardResponse struct {
+    Success        bool    `json:"success"`
+    Balance        float64 `json:"balance"`
+    InvestedAmount float64 `json:"invested_amount"`
+}
+
+func GetDashboard(w http.ResponseWriter, r *http.Request) {
+    uid := r.URL.Query().Get("uid")
+
+    db := ftdb.GRMMariaFTPRDDB
+
+    var totalCredit float64
+    var totalDebit float64
+    db.Table("st1006_transaction").Where("uid = ? AND status = ?", uid, "C").Select("SUM(amount)").Scan(&totalCredit)
+    db.Table("st1006_transaction").Where("uid = ? AND status = ?", uid, "D").Select("SUM(amount)").Scan(&totalDebit)
+
+    var invested float64
+    db.Table("st1006_trade").Where("uid = ? AND trade_status = ?", uid, "H").Select("SUM(qamount)").Scan(&invested)
+
+    balance := totalCredit - totalDebit
+
+    json.NewEncoder(w).Encode(DashboardResponse{
+        Success:        true,
+        Balance:        balance,
+        InvestedAmount: invested,
+    })
+}
+
+
+---
+
+📄 handlers/trading.go
+
+package handlers
+
+import (
+    "encoding/json"
+    "net/http"
+    "time"
+
+    "final/models"
+)
+
+type TradeRequest struct {
+    UID     int `json:"uid"`
+    ShareID int `json:"share_id"`
+    QAmount int `json:"qamount"`
+}
+
+type TradeResponse struct {
+    Success bool   `json:"success"`
+    Message string `json:"message"`
+}
+
+func GetShares(w http.ResponseWriter, r *http.Request) {
+    db := ftdb.GRMMariaFTPRDDB
+    var shares []models.Share
+    db.Table("st1006_share").Find(&shares)
+    json.NewEncoder(w).Encode(shares)
+}
+
+func BuyShare(w http.ResponseWriter, r *http.Request) {
+    var req TradeRequest
+    json.NewDecoder(r.Body).Decode(&req)
+
+    if req.QAmount <= 0 {
+        json.NewEncoder(w).Encode(TradeResponse{Success: false, Message: "Invalid Quantity"})
+        return
+    }
+
+    db := ftdb.GRMMariaFTPRDDB
+    trade := models.Trade{
+        UID:         req.UID,
+        ShareID:     req.ShareID,
+        QAmount:     req.QAmount,
+        TradeStatus: "H",
+        Status:      "Active",
+        Audit: models.Audit{
+            CreatedBy: "system",
+            UpdatedBy: "system",
+            CreatedAt: time.Now(),
+            UpdatedAt: time.Now(),
+        },
+    }
+    db.Table("st1006_trade").Create(&trade)
+
+    json.NewEncoder(w).Encode(TradeResponse{Success: true, Message: "Share Bought"})
+}
+
+func SellShare(w http.ResponseWriter, r *http.Request) {
+    var req TradeRequest
+    json.NewDecoder(r.Body).Decode(&req)
+
+    db := ftdb.GRMMariaFTPRDDB
+    db.Table("st1006_trade").Where("uid = ? AND share_id = ? AND trade_status = ?", req.UID, req.ShareID, "H").
+        Update("trade_status", "S")
+
+    json.NewEncoder(w).Encode(TradeResponse{Success: true, Message: "Share Sold"})
+}
+
+func MyCart(w http.ResponseWriter, r *http.Request) {
+    uid := r.URL.Query().Get("uid")
+    db := ftdb.GRMMariaFTPRDDB
+    var trades []models.Trade
+    db.Table("st1006_trade").Where("uid = ?", uid).Find(&trades)
+    json.NewEncoder(w).Encode(trades)
+}
+
+
+---
+
+📄 handlers/admin.go
+
+package handlers
+
+import (
+    "encoding/json"
+    "net/http"
+
+    "final/models"
+)
+
+type AdminResponse struct {
+    Success          bool `json:"success"`
+    TotalUsers       int  `json:"total_users"`
+    ActiveUsers      int  `json:"active_users"`
+    PendingUsers     int  `json:"pending_users"`
+    TotalTransactions int  `json:"total_transactions"`
+}
+
+func ApproveUser(w http.ResponseWriter, r *http.Request) {
+    uid := r.URL.Query().Get("uid")
+    db := ftdb.GRMMariaFTPRDDB
+    db.Table("st1006_user").Where("id = ?", uid).Update("status", "A")
+    json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "message": "User Approved"})
+}
+
+func RejectUser(w http.ResponseWriter, r *http.Request) {
+    uid := r.URL.Query().Get("uid")
+    db := ftdb.GRMMariaFTPRDDB
+    db.Table("st1006_user").Where("id = ?", uid).Update("status", "R")
+    json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "message": "User Rejected"})
+}
+
+func AdminDashboard(w http.ResponseWriter, r *http.Request) {
+    db := ftdb.GRMMariaFTPRDDB
+    var totalUsers, activeUsers, pendingUsers, totalTransactions int
+
+    db.Table("st1006_user").Count(&totalUsers)
+    db.Table("st1006_user").Where("status = ?", "A").Count(&activeUsers)
+    db.Table("st1006_user").Where("status = ?", "P").Count(&pendingUsers)
+    db.Table("st1006_transaction").Count(&totalTransactions)
+
+    json.NewEncoder(w).Encode(AdminResponse{
+        Success:           true,
+        TotalUsers:        totalUsers,
+        ActiveUsers:       activeUsers,
+        PendingUsers:      pendingUsers,
+        TotalTransactions: totalTransactions,
+    })
+}
+
+
+---
+
+📄 main.go (updated with new APIs)
+
+package main
+
+import (
+    "final/handlers"
+    "final/utils"
+    "log"
+    "net/http"
+)
+
+func MariaDBConnection() {
+    err := ftdb.OpenDBConnection("192.168.2.5", "ST1006", "Best@123@123", "training", "mysql", "3306")
+    if err != nil {
+        log.Println("Failed to connect to DB", err)
+        return
+    }
+    dbInfo := ftdb.GRMMariaFTPRDDB
+    _ = dbInfo
+}
+
+func main() {
+    MariaDBConnection()
+
+    // Auth
+    http.HandleFunc("/login", utils.EnableCORS(handlers.Login))
+
+    // Personal
+    http.HandleFunc("/personal/save", utils.EnableCORS(utils.WithCookie(handlers.SavePersonal)))
+
+    // Bank
+    http.HandleFunc("/validate-ifsc", utils.EnableCORS(utils.WithCookie(handlers.ValidateIFSC)))
+
+    // Transactions
+    http.HandleFunc("/add-fund", utils.EnableCORS(utils.WithCookie(handlers.AddFund)))
+    http.HandleFunc("/withdraw", utils.EnableCORS(utils.WithCookie(handlers.Withdraw)))
+    http.HandleFunc("/billing/export", utils.EnableCORS(utils.WithCookie(handlers.ExportCSV)))
+
+    // Dashboard
+    http.HandleFunc("/dashboard", utils.EnableCORS(utils.WithCookie(handlers.GetDashboard)))
+
+    // Trading
+    http.HandleFunc("/shares", utils.EnableCORS(utils.WithCookie(handlers.GetShares)))
+    http.HandleFunc("/buy", utils.EnableCORS(utils.WithCookie(handlers.BuyShare)))
+    http.HandleFunc("/sell", utils.EnableCORS(utils.WithCookie(handlers.SellShare)))
+    http.HandleFunc("/mycart", utils.EnableCORS(utils.WithCookie(handlers.MyCart)))
+
+    // Admin
+    http.HandleFunc("/admin/approve", utils.EnableCORS(utils.WithCookie(handlers.ApproveUser)))
+    http.HandleFunc("/admin/reject", utils.EnableCORS(utils.WithCookie(handlers.RejectUser)))
+    http.HandleFunc("/admin/dashboard", utils.EnableCORS(utils.WithCookie(handlers.AdminDashboard)))
+
+    log.Println("Server started at :8080")
+    log.Fatal(http.ListenAndServe(":8080", nil))
+}
+
+
+
+
+
