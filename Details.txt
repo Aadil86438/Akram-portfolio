@@ -1,215 +1,360 @@
-📄 1. user.sql
-
-CREATE TABLE IF NOT EXISTS `User` (
-    ID INT AUTO_INCREMENT PRIMARY KEY,
-    Name VARCHAR(50) NOT NULL,
-    MobNo BIGINT UNIQUE NOT NULL,
-    Email VARCHAR(50) UNIQUE NOT NULL,
-    Status CHAR(1) NOT NULL, -- A=Active, I=Inactive, P=Pending, O=Open, R=Reject, M=Admin
-
-    CreatedBy VARCHAR(50),
-    UpdatedBy VARCHAR(50),
-    CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UpdatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
+📂 Complete Code
 
 
 ---
 
-📄 2. personal.sql
+📄 src/main.js
 
-CREATE TABLE IF NOT EXISTS Personal (
-    ID INT AUTO_INCREMENT PRIMARY KEY,
-    UID INT NOT NULL,
-    FName VARCHAR(50),
-    MName VARCHAR(50),
-    LName VARCHAR(50),
-    Country VARCHAR(30),
-    State VARCHAR(20),
-    City VARCHAR(20),
-    Pincode INT,
-    Address VARCHAR(100),
-    SelectedSegments VARCHAR(20), -- NSC/BSC/MCX
-    FilePath VARCHAR(150),        -- Bank proof / statement file path
+import Vue from "vue";
+import App from "./App.vue";
+import router from "./router";
+import Vuetify from "vuetify";
+import "vuetify/dist/vuetify.min.css";
 
-    CreatedBy VARCHAR(50),
-    UpdatedBy VARCHAR(50),
-    CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UpdatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+Vue.config.productionTip = false;
 
-    FOREIGN KEY (UID) REFERENCES `User`(ID)
-);
+Vue.use(Vuetify);
+
+new Vue({
+  vuetify: new Vuetify(),
+  router,
+  render: h => h(App)
+}).$mount("#app");
 
 
 ---
 
-📄 3. bank.sql
+📄 src/App.vue
 
-CREATE TABLE IF NOT EXISTS Bank (
-    ID INT AUTO_INCREMENT PRIMARY KEY,
-    UID INT NOT NULL,
-    IFSC VARCHAR(20),
-    AccNo BIGINT,
-    
-    CreatedBy VARCHAR(50),
-    UpdatedBy VARCHAR(50),
-    CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UpdatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+<template>
+  <v-app>
+    <v-main>
+      <router-view />
+    </v-main>
+  </v-app>
+</template>
 
-    FOREIGN KEY (UID) REFERENCES `User`(ID)
-);
-
-
----
-
-📄 4. session.sql
-
-CREATE TABLE IF NOT EXISTS Session (
-    ID INT AUTO_INCREMENT PRIMARY KEY,
-    UID INT NOT NULL,
-    RequestID VARCHAR(80) NOT NULL,
-    ExpireDate BIGINT NOT NULL, -- Unix timestamp
-
-    CreatedBy VARCHAR(50),
-    UpdatedBy VARCHAR(50),
-    CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UpdatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-
-    FOREIGN KEY (UID) REFERENCES `User`(ID)
-);
+<script>
+export default {
+  name: "App"
+};
+</script>
 
 
 ---
 
-📄 5. transaction.sql
+📄 src/router/index.js
 
-CREATE TABLE IF NOT EXISTS `Transaction` (
-    ID INT AUTO_INCREMENT PRIMARY KEY,
-    UID INT NOT NULL,
-    Amount INT NOT NULL,
-    Status CHAR(1) NOT NULL, -- C=Credit, D=Debit
+import Vue from "vue";
+import Router from "vue-router";
 
-    CreatedBy VARCHAR(50),
-    UpdatedBy VARCHAR(50),
-    CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UpdatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+import LoginView from "../views/LoginView.vue";
+import DashboardView from "../views/DashboardView.vue";
+import BankView from "../views/BankView.vue";
+import TradingView from "../views/TradingView.vue";
+import CartView from "../views/CartView.vue";
+import AdminView from "../views/AdminView.vue";
+import UsersView from "../views/UsersView.vue";
+import AddFund from "../components/AddFund.vue";
+import Withdraw from "../components/Withdraw.vue";
 
-    FOREIGN KEY (UID) REFERENCES `User`(ID)
-);
+Vue.use(Router);
 
-
----
-
-📄 6. share.sql
-
-CREATE TABLE IF NOT EXISTS Share (
-    ID INT AUTO_INCREMENT PRIMARY KEY,
-    SegmentName CHAR(3) NOT NULL, -- NSC / BSC / MCX
-    ShareName VARCHAR(50) NOT NULL,
-    SharePrice INT NOT NULL,
-
-    CreatedBy VARCHAR(50),
-    UpdatedBy VARCHAR(50),
-    CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UpdatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-
-
----
-
-📄 7. trade.sql
-
-CREATE TABLE IF NOT EXISTS Trade (
-    ID INT AUTO_INCREMENT PRIMARY KEY,
-    UID INT NOT NULL,
-    ShareID INT NOT NULL,
-    Status CHAR(1) NOT NULL,
-    QAmount INT NOT NULL,
-    TradeStatus CHAR(1) NOT NULL, -- H=Hold, S=Sell
-
-    CreatedBy VARCHAR(50),
-    UpdatedBy VARCHAR(50),
-    CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UpdatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-
-    FOREIGN KEY (UID) REFERENCES `User`(ID),
-    FOREIGN KEY (ShareID) REFERENCES Share(ID)
-);
+export default new Router({
+  mode: "history",
+  routes: [
+    { path: "/", component: LoginView },
+    { path: "/dashboard", component: DashboardView },
+    { path: "/bank", component: BankView },
+    { path: "/trading", component: TradingView },
+    { path: "/cart", component: CartView },
+    { path: "/admin", component: AdminView },
+    { path: "/users", component: UsersView },
+    { path: "/add-fund", component: AddFund },
+    { path: "/withdraw", component: Withdraw }
+  ]
+});
 
 
 ---
 
-📌 How to use in DBeaver
+📄 src/services/EventService.js
 
-1. Create a new SQL script for each file.
+import axios from "axios";
 
+const apiClient = axios.create({
+  baseURL: "http://localhost:8080",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  withCredentials: true
+});
 
-2. Run them in this order:
-
-1. user.sql
-
-
-2. personal.sql
-
-
-3. bank.sql
-
-
-4. session.sql
-
-
-5. transaction.sql
-
-
-6. share.sql
-
-
-7. trade.sql
-
-
-
-
-3. Check in navigator → all 7 tables should appear.
-
-
+export default {
+  login(data) {
+    return apiClient.post("/login", data);
+  },
+  getDashboard(uid) {
+    return apiClient.get(`/dashboard?uid=${uid}`);
+  },
+  addFund(data) {
+    return apiClient.post("/add-fund", data);
+  },
+  withdraw(data) {
+    return apiClient.post("/withdraw", data);
+  },
+  validateIFSC(data) {
+    return apiClient.post("/validate-ifsc", data);
+  },
+  getShares() {
+    return apiClient.get("/shares");
+  },
+  buyShare(data) {
+    return apiClient.post("/buy-share", data);
+  },
+  sellShare(data) {
+    return apiClient.post("/sell-share", data);
+  },
+  getCart(uid) {
+    return apiClient.get(`/cart?uid=${uid}`);
+  },
+  exportCSV() {
+    return apiClient.get("/export-csv", { responseType: "blob" });
+  },
+  adminDashboard() {
+    return apiClient.get("/admin-dashboard");
+  },
+  approveUser(uid) {
+    return apiClient.post("/approve-user", { uid: uid });
+  },
+  rejectUser(uid) {
+    return apiClient.post("/reject-user", { uid: uid });
+  }
+};
 
 
 ---
 
+📂 Components
 
 
+---
 
--- Insert 1 User (Admin)
-INSERT INTO `User` (Name, MobNo, Email, Status, CreatedBy, UpdatedBy)
-VALUES ('Admin User', 9876543210, 'admin@test.com', 'M', 'system', 'system');
+📄 src/components/LoginForm.vue
 
--- Insert 1 User (Normal Active)
-INSERT INTO `User` (Name, MobNo, Email, Status, CreatedBy, UpdatedBy)
-VALUES ('Test User', 9123456789, 'user@test.com', 'A', 'system', 'system');
+<template>
+  <v-container>
+    <v-form @submit.prevent="doLogin">
+      <v-text-field v-model="username" label="Username"></v-text-field>
+      <v-text-field v-model="password" type="password" label="Password"></v-text-field>
+      <v-btn type="submit" color="primary">Login</v-btn>
+      <p>{{ message }}</p>
+    </v-form>
+  </v-container>
+</template>
 
--- Insert into Personal (for Test User)
-INSERT INTO Personal (UID, FName, MName, LName, Country, State, City, Pincode, Address, SelectedSegments, FilePath, CreatedBy, UpdatedBy)
-VALUES (2, 'Ravi', 'K', 'Sharma', 'India', 'TN', 'Chennai', 600001, 'No.10, MG Road', 'MCX', '/uploads/bank_proof.pdf', 'system', 'system');
+<script>
+import EventService from "../services/EventService";
 
--- Insert into Bank (for Test User)
-INSERT INTO Bank (UID, IFSC, AccNo, CreatedBy, UpdatedBy)
-VALUES (2, 'SBIN0001234', 123456789012, 'system', 'system');
+export default {
+  data() {
+    return { username: "", password: "", message: "" };
+  },
+  methods: {
+    doLogin() {
+      EventService.login({ username: this.username, password: this.password })
+        .then(res => {
+          if (res.data.success) {
+            this.$router.push("/dashboard");
+          } else {
+            this.message = res.data.error;
+          }
+        })
+        .catch(() => (this.message = "Login failed"));
+    }
+  }
+};
+</script>
 
--- Insert into Session (for Test User)
-INSERT INTO Session (UID, RequestID, ExpireDate, CreatedBy, UpdatedBy)
-VALUES (2, 'abcd1234xyz', 1893456000, 'system', 'system'); -- expire date is future timestamp
 
--- Insert into Share (some dummy shares)
-INSERT INTO Share (SegmentName, ShareName, SharePrice, CreatedBy, UpdatedBy)
-VALUES 
-('NSC', 'TATA MOTORS', 550, 'system', 'system'),
-('BSC', 'RELIANCE', 2500, 'system', 'system'),
-('MCX', 'GOLD FUTURE', 62000, 'system', 'system');
+---
 
--- Insert into Transaction (Add Fund for Test User)
-INSERT INTO `Transaction` (UID, Amount, Status, CreatedBy, UpdatedBy)
-VALUES (2, 5000, 'C', 'system', 'system'); -- C = Credit
+📄 src/components/Dashboard.vue
 
--- Insert into Trade (User buys share)
-INSERT INTO Trade (UID, ShareID, Status, QAmount, TradeStatus, CreatedBy, UpdatedBy)
-VALUES (2, 1, 'A', 10, 'H', 'system', 'system'); -- H = Hold
+<template>
+  <v-container>
+    <v-card>
+      <v-card-title>Dashboard</v-card-title>
+      <v-card-text>
+        <p><strong>Balance:</strong> {{ balance }}</p>
+        <p><strong>Invested:</strong> {{ invested }}</p>
+        <apexchart type="pie" width="380" :options="chartOptions" :series="[balance, invested]" />
+      </v-card-text>
+      <v-card-actions>
+        <v-btn color="green" @click="$router.push('/add-fund')">Add Fund</v-btn>
+        <v-btn color="red" @click="$router.push('/withdraw')">Withdraw</v-btn>
+        <v-btn color="blue" @click="$router.push('/bank')">Bank Info</v-btn>
+        <v-btn color="orange" @click="$router.push('/trading')">Trading</v-btn>
+        <v-btn color="teal" @click="$router.push('/cart')">My Cart</v-btn>
+        <v-btn color="purple" @click="downloadCSV">Download CSV</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-container>
+</template>
+
+<script>
+import EventService from "../services/EventService";
+import VueApexCharts from "vue-apexcharts";
+
+export default {
+  components: { apexchart: VueApexCharts },
+  data() {
+    return {
+      balance: 0,
+      invested: 0,
+      chartOptions: {
+        labels: ["Balance", "Invested"],
+        legend: { position: "bottom" }
+      }
+    };
+  },
+  mounted() {
+    EventService.getDashboard(1) // example uid = 1
+      .then(res => {
+        this.balance = res.data.balance;
+        this.invested = res.data.invested_amount;
+      })
+      .catch(() => {});
+  },
+  methods: {
+    downloadCSV() {
+      EventService.exportCSV()
+        .then(res => {
+          const url = window.URL.createObjectURL(new Blob([res.data]));
+          const link = document.createElement("a");
+          link.href = url;
+          link.setAttribute("download", "transactions.csv");
+          document.body.appendChild(link);
+          link.click();
+        })
+        .catch(() => {});
+    }
+  }
+};
+</script>
+
+
+---
+
+📄 src/components/AddFund.vue
+
+<template>
+  <v-container>
+    <v-form @submit.prevent="doAdd">
+      <v-text-field v-model="amount" label="Amount" type="number"></v-text-field>
+      <v-btn type="submit" color="green">Add Fund</v-btn>
+      <p>{{ message }}</p>
+    </v-form>
+  </v-container>
+</template>
+
+<script>
+import EventService from "../services/EventService";
+
+export default {
+  data() {
+    return { amount: 0, message: "" };
+  },
+  methods: {
+    doAdd() {
+      EventService.addFund({ uid: 1, amount: Number(this.amount) })
+        .then(res => (this.message = res.data.message))
+        .catch(() => (this.message = "Error adding fund"));
+    }
+  }
+};
+</script>
+
+
+---
+
+📄 src/components/Withdraw.vue
+
+<template>
+  <v-container>
+    <v-form @submit.prevent="doWithdraw">
+      <v-text-field v-model="amount" label="Withdraw Amount" type="number"></v-text-field>
+      <v-btn type="submit" color="red">Withdraw</v-btn>
+      <p>{{ message }}</p>
+    </v-form>
+  </v-container>
+</template>
+
+<script>
+import EventService from "../services/EventService";
+
+export default {
+  data() {
+    return { amount: 0, message: "" };
+  },
+  methods: {
+    doWithdraw() {
+      EventService.withdraw({ uid: 1, amount: Number(this.amount) })
+        .then(res => (this.message = res.data.message))
+        .catch(() => (this.message = "Error withdrawing"));
+    }
+  }
+};
+</script>
+
+
+---
+
+📄 src/components/BankForm.vue
+
+<template>
+  <v-container>
+    <v-form @submit.prevent="saveBank">
+      <v-text-field v-model="ifsc" label="IFSC"></v-text-field>
+      <v-text-field v-model="accNo" label="Account No" type="number"></v-text-field>
+
+      <v-checkbox-group v-model="segments" row>
+        <v-checkbox label="NSE" value="NSE"></v-checkbox>
+        <v-checkbox label="BSE" value="BSE"></v-checkbox>
+        <v-checkbox label="MCX" value="MCX"></v-checkbox>
+      </v-checkbox-group>
+
+      <v-file-input v-model="file" label="Upload Proof"></v-file-input>
+
+      <v-btn type="submit" color="blue">Save Bank Info</v-btn>
+      <p>{{ message }}</p>
+    </v-form>
+  </v-container>
+</template>
+
+<script>
+import EventService from "../services/EventService";
+
+export default {
+  data() {
+    return { ifsc: "", accNo: "", segments: [], file: null, message: "" };
+  },
+  methods: {
+    saveBank() {
+      EventService.validateIFSC({
+        uid: 1,
+        ifsc: this.ifsc,
+        acc_no: Number(this.accNo),
+        selected_segments: this.segments.join(","),
+        file_path: this.file ? this.file.name : ""
+      })
+        .then(res => {
+          this.message = res.data.success
+            ? `Bank saved: ${res.data.bank} - ${res.data.branch}`
+            : res.data.error;
+        })
+        .catch(() => (this.message = "Error saving bank info"));
+    }
+  }
+};
+</script>
