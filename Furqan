@@ -1,0 +1,143 @@
+package main
+
+import (
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"time"
+
+	_ "github.com/go-sql-driver/mysql" // MySQL driver
+)
+
+// --------------------
+// Struct for input data
+// --------------------
+type EkycProductInput struct {
+	RequestUID          string `json:"request_uid"`
+	ParticipantCategory string `json:"participant_category"`
+	Products            string `json:"products"`
+	SessionID           string `json:"session_id"`
+	UpdatedSessionID    string `json:"updated_session_id"`
+	IsActive            string `json:"is_active"`
+}
+
+// --------------------
+// Connect to Database
+// --------------------
+func connectDB() (*sql.DB, error) {
+	// change username, password, dbname according to your system
+	db, err := sql.Open("mysql", "username:password@tcp(localhost:3306)/yourdbname")
+	if err != nil {
+		return nil, err
+	}
+	return db, nil
+}
+
+// --------------------
+// Existing API Handler (POST)
+// --------------------
+func existingAPIHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("ExistingAPIHandler started")
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Only POST allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Step 1: Read raw body
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read body", http.StatusBadRequest)
+		return
+	}
+
+	// Step 2: Unmarshal (JSON → Go struct)
+	var input EkycProductInput
+	err = json.Unmarshal(body, &input)
+	if err != nil {
+		http.Error(w, "Invalid JSON format", http.StatusBadRequest)
+		return
+	}
+
+	// Step 3: Handle isActive from checkbox logic
+	// If front-end doesn't send is_active or checkbox unchecked → mark as 'N'
+	if input.IsActive == "" {
+		input.IsActive = "N"
+	} else if input.IsActive == "true" {
+		input.IsActive = "Y"
+	} else if input.IsActive == "false" {
+		input.IsActive = "N"
+	}
+
+	// Step 4: Validation
+	if input.RequestUID == "" || input.Products == "" {
+		http.Error(w, "Missing required fields", http.StatusBadRequest)
+		return
+	}
+
+	// Step 5: Connect to DB
+	db, err := connectDB()
+	if err != nil {
+		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	// Step 6: Prepare query
+	query := `
+		INSERT INTO ekyc_mcx_products 
+		(request_uid, participant_category, products, session_id, updated_session_id, createdate, updatedAt, isActive)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`
+
+	stmt, err := db.Prepare(query)
+	if err != nil {
+		http.Error(w, "Failed to prepare statement", http.StatusInternalServerError)
+		return
+	}
+	defer stmt.Close()
+
+	// Step 7: Execute insert
+	_, err = stmt.Exec(
+		input.RequestUID,
+		input.ParticipantCategory,
+		input.Products,
+		input.SessionID,
+		input.UpdatedSessionID,
+		time.Now().Unix(),
+		time.Now().Unix(),
+		input.IsActive,
+	)
+	if err != nil {
+		http.Error(w, "Insert failed", http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Println("Data inserted successfully")
+
+	// Step 8: Marshal (Go map → JSON) with error handling
+	response := map[string]interface{}{
+		"status":  "success",
+		"message": "Data inserted successfully",
+	}
+	respJSON, err := json.Marshal(response)
+	if err != nil {
+		http.Error(w, "Failed to marshal response", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(respJSON)
+}
+
+// --------------------
+// Main Function
+// --------------------
+func main() {
+	http.HandleFunc("/existingAPI", existingAPIHandler)
+	fmt.Println("✅ Server running on http://localhost:8080")
+	http.ListenAndServe(":8080", nil)
+}
