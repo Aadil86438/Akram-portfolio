@@ -1,0 +1,6 @@
+INSERT INTO ekyc_mcx_products 
+(request_uid, participant_category, products, session_id, updated_session_id, createdate, updatedAt, isActive)
+VALUES (
+    ?, ?, ?, ?, ?, ?, ?,
+    IF(? = 'true', 'Y', 'N')
+);
