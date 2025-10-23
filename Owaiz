@@ -1,0 +1,197 @@
+Here's the complete code ready to copy and paste:
+
+```go
+package main
+
+import (
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"time"
+
+	_ "github.com/go-sql-driver/mysql" // MySQL driver
+)
+
+// --------------------
+// Struct for input data
+// --------------------
+type EkycProductInput struct {
+	RequestUID          string `json:"request_uid"`
+	ParticipantCategory string `json:"participant_category"`
+	Products            string `json:"products"`
+	SessionID           string `json:"session_id"`
+	UpdatedSessionID    string `json:"updated_session_id"`
+	IsActive            string `json:"is_active"`
+}
+
+// --------------------
+// Connect to Database
+// --------------------
+func connectDB() (*sql.DB, error) {
+	db, err := sql.Open("mysql", "username:password@tcp(localhost:3306)/yourdbname")
+	if err != nil {
+		return nil, err
+	}
+	return db, nil
+}
+
+// --------------------
+// Read and parse request body
+// --------------------
+func readRequestBody(r *http.Request) (*EkycProductInput, error) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read body: %w", err)
+	}
+
+	var input EkycProductInput
+	err = json.Unmarshal(body, &input)
+	if err != nil {
+		return nil, fmt.Errorf("invalid JSON format: %w", err)
+	}
+
+	return &input, nil
+}
+
+// --------------------
+// Normalize isActive field
+// --------------------
+func normalizeIsActive(input *EkycProductInput) {
+	if input.IsActive == "" {
+		input.IsActive = "N"
+	} else if input.IsActive == "true" {
+		input.IsActive = "Y"
+	} else if input.IsActive == "false" {
+		input.IsActive = "N"
+	}
+}
+
+// --------------------
+// Validate input data
+// --------------------
+func validateInput(input *EkycProductInput) error {
+	if input.RequestUID == "" || input.Products == "" {
+		return fmt.Errorf("missing required fields")
+	}
+	return nil
+}
+
+// --------------------
+// Insert data into database
+// --------------------
+func insertEkycProduct(db *sql.DB, input *EkycProductInput) error {
+	query := `
+		INSERT INTO ekyc_mcx_products 
+		(request_uid, participant_category, products, session_id, updated_session_id, createdate, updatedAt, isActive)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`
+
+	stmt, err := db.Prepare(query)
+	if err != nil {
+		return fmt.Errorf("failed to prepare statement: %w", err)
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(
+		input.RequestUID,
+		input.ParticipantCategory,
+		input.Products,
+		input.SessionID,
+		input.UpdatedSessionID,
+		time.Now().Unix(),
+		time.Now().Unix(),
+		input.IsActive,
+	)
+	if err != nil {
+		return fmt.Errorf("insert failed: %w", err)
+	}
+
+	return nil
+}
+
+// --------------------
+// Create JSON response
+// --------------------
+func createSuccessResponse() ([]byte, error) {
+	response := map[string]interface{}{
+		"status":  "success",
+		"message": "Data inserted successfully",
+	}
+	
+	respJSON, err := json.Marshal(response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal response: %w", err)
+	}
+	
+	return respJSON, nil
+}
+
+// --------------------
+// Send JSON response
+// --------------------
+func sendJSONResponse(w http.ResponseWriter, data []byte, statusCode int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	w.Write(data)
+}
+
+// --------------------
+// Existing API Handler (POST)
+// --------------------
+func existingAPIHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("ExistingAPIHandler started")
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Only POST allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	input, err := readRequestBody(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	normalizeIsActive(input)
+
+	if err := validateInput(input); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	db, err := connectDB()
+	if err != nil {
+		http.Error(w, "Database connection failed", http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	if err := insertEkycProduct(db, input); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Println("Data inserted successfully")
+
+	respJSON, err := createSuccessResponse()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	sendJSONResponse(w, respJSON, http.StatusOK)
+}
+
+// --------------------
+// Main Function
+// --------------------
+func main() {
+	http.HandleFunc("/existingAPI", existingAPIHandler)
+	fmt.Println("✅ Server running on http://localhost:8080")
+	http.ListenAndServe(":8080", nil)
+}
+```
+
+Just copy the entire code block and paste it into your `.go` file!
