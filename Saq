@@ -4,3 +4,28 @@ VALUES (
     ?, ?, ?, ?, ?, ?, ?,
     IF(? = 'true', 'Y', 'N')
 );
+
+
+
+
+query := `
+INSERT INTO ekyc_mcx_products 
+(request_uid, participant_category, products, session_id, updated_session_id, createdate, updatedAt, isActive)
+VALUES (?, ?, ?, ?, ?, UNIX_TIMESTAMP(NOW()), UNIX_TIMESTAMP(NOW()),
+    CASE 
+        WHEN ? = 'true' THEN 'Y'
+        WHEN ? = 'false' THEN 'N'
+        WHEN ? = '' THEN 'N'
+        ELSE 'N'
+    END
+);
+`
+
+_, err := db.Exec(query,
+	input.RequestUID,
+	input.ParticipantCategory,
+	input.Products,
+	input.SessionID,
+	input.UpdatedSessionID,
+	input.IsActive, input.IsActive, input.IsActive, // for 3 CASE checks
+)
