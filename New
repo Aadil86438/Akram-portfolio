@@ -1,0 +1,83 @@
+
+
+> You are given my existing Go API code (which includes comments for clarity).
+Your job is to rewrite and structure that same code in a clean, ordered, and reusable format.
+Follow these strict requirements carefully and completely:
+
+
+
+
+---
+
+⚙️ REQUIREMENTS
+
+1. No main.go — the entire code should be written inside one API file only (as if it’s part of a larger service).
+
+
+2. Database wrapper:
+
+Strictly do not use *sql.DB anywhere.
+
+Use ftdb.NewEky_GDB only for database operations, lsid, uid, sessions, or related purposes.
+
+Use pDebug, lErr, lUid, and sUid as needed.
+
+
+
+3. Use the same struct and same query exactly as in my code.
+
+Do not rename fields, queries, or database table/column names.
+
+
+
+4. The API should be broken into four methods only, in this order:
+
+1. Collect() – Collect input data from request.
+
+
+2. Validate() – Validate required fields and formats.
+
+
+3. Assign() – Assign default or computed values.
+❌ Do not handle Y/N logic for isActive here; leave a placeholder.
+
+
+4. Construct() – Construct and execute query + return final response.
+
+
+
+
+5. The API should remain single, not split into multiple routes or handlers.
+
+
+6. Keep my existing comments for clarity (you may reorder if needed for better structure).
+
+
+7. Write clean, readable, properly indented Go code — professional and production-ready.
+
+
+8. Ensure no logic repetition and that functions are reusable.
+
+
+
+
+---
+
+💾 OUTPUT FORMAT
+
+Return the entire final code (only one file, one API).
+
+Do not add any explanations before or after — just the code.
+
+
+
+---
+
+🧩 INPUT
+
+I will paste my old code (with comments) after this prompt.
+
+Use that code as the base and apply all instructions above.
+
+
+
