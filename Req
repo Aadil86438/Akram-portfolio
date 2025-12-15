@@ -1,0 +1,33 @@
+I am pasting my existing frontend and backend code below.
+My code already has:
+- batch numbers
+- separate tables for xlsx, txt, bulk
+- logic to hide batches after upload
+
+Do NOT introduce new variables, new tables, or new concepts.
+Just adjust existing logic to satisfy this requirement.
+
+UPDATED REQUIREMENT:
+
+1) If a user uploads XLSX files for batch 1, 2, and 3:
+   - In the XLSX uploader dropdown, batch 1, 2, and 3 must disappear.
+   - Only the next new batch (Batch04(N)) should be shown.
+
+2) If the user has NEVER uploaded TXT:
+   - The TXT uploader dropdown must still show batch 1, 2, and 3.
+   - This is required so the user can immediately understand
+     that XLSX was uploaded 3 times but TXT is still fresh.
+
+3) Same rule applies independently for BULK uploader.
+
+4) Batch numbers must stay consistent across all uploaders.
+   Do NOT reset or generate independent batch sequences.
+
+5) Visibility rule summary:
+   - For the uploader where a batch is already uploaded → hide that batch.
+   - For other uploaders where that batch is NOT uploaded → show it.
+
+6) The next new batch should appear ONLY after upload happens.
+
+Apply only this visibility logic change to my existing code.
+Do not add assumptions or redesign anything.
