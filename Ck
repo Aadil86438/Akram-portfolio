@@ -1,0 +1,70 @@
+I will provide you with my company’s standard backend code.
+
+First, carefully analyze and understand the existing code style and flow, including:
+
+API structure and layering
+
+User handling approach
+
+Error handling pattern
+
+Logging format and methods
+
+Database query execution style
+
+Naming conventions
+
+Code readability and organization
+
+
+After fully understanding the standards, write a new API strictly following the same style and conventions.
+
+Requirements for the new API:
+
+The API should fetch data from a database table using a SELECT query
+
+The SQL query must be written in a separate method/function, outside the API handler
+
+The API should only call that query method, not contain inline SQL
+
+No changes, improvements, or new patterns should be introduced
+
+Do not add new variables, helpers, or abstractions beyond what already exists in the standard code
+
+Error handling and logging must exactly match the existing approach
+
+
+The final output should look like it was written by the same developer and team, fully compliant with company standards.
+
+
+
+
+
+> I have an existing production-ready code that is working perfectly.
+During code review, I was told that there is code repetition for multiple buttons, but the logic and behavior must remain exactly the same.
+
+Your task:
+
+Do NOT change any existing logic
+
+Do NOT add new variables, features, or optimizations
+
+Do NOT introduce new method calls or redesign the flow
+
+Do NOT refactor in a way that affects execution order
+
+Do NOT break the working behavior
+
+
+Only do this:
+
+Remove code repetition in the safest possible way
+
+Reuse existing code without altering functionality
+
+Keep all conditions, loops, and side effects exactly as they are
+
+
+If avoiding repetition requires changing logic, then do not change it — just keep the code as-is.
+
+Return the updated code and briefly explain only what repetition was removed, nothing else.
