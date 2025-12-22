@@ -1,0 +1,59 @@
+I have an existing LIVE PRODUCTION Vue + Vuetify codebase.
+This code is already deployed and MUST NOT be refactored or redesigned.
+
+STRICT RULES:
+- Do NOT change UI design
+- Do NOT change layout or component structure
+- Do NOT move components
+- Do NOT add new methods, variables, or logic
+- Do NOT add new styles, wrappers, or custom code
+- Do NOT optimize or rewrite anything
+- Apply ONLY a minimal, safe fix
+
+CURRENT STRUCTURE:
+Each uploader card contains:
+- v-file-input (Choose File)
+- Commit button
+- Discard button
+
+All of them are inside the same parent container (v-sheet).
+
+REQUIRED FLOW (DO NOT CHANGE):
+1. On initial load:
+   - Choose File enabled
+   - Commit & Discard disabled
+2. After file upload success:
+   - Choose File disabled
+   - Commit & Discard enabled
+3. After Commit:
+   - All buttons disabled
+
+This logic already works correctly and must remain untouched.
+
+PROBLEM:
+When clicking Commit or Discard, the file explorer popup opens unexpectedly,
+even when v-file-input is disabled.
+
+ROOT CAUSE (ALREADY IDENTIFIED):
+Click event bubbling inside a shared container causes v-file-input
+to capture clicks from Commit and Discard buttons.
+
+WHAT NEEDS TO BE FIXED:
+- File picker must open ONLY when clicking Choose File
+- File picker must NEVER open when clicking Commit or Discard
+
+ALLOWED FIX (ONLY THIS):
+- Prevent click event propagation from Commit and Discard buttons
+- Use event handling such as @click.stop (or equivalent)
+- Apply the fix only on the buttons
+- No other changes are allowed
+
+DELIVERABLE:
+- Show BEFORE vs AFTER
+- Highlight only the exact minimal change
+- Change the fewest characters possible
+- Do not suggest alternate approaches or refactors
+
+FINAL NOTE:
+This is live production code.
+Any unnecessary change will be rejected.
