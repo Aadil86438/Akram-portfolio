@@ -1,0 +1,35 @@
+I am working on existing production Go code.
+
+Wherever the function `zohocrmdeal` is called, `generatetoken()` must be executed immediately before that call.
+
+Background:
+- A `generatetoken()` function already exists.
+- Earlier, some required fields were missing, which caused:
+  client_id declared and not used
+- Later, my team lead shared an official email containing:
+  - The correct JSON struct
+  - The exact field names
+  - The required keys (client_id, client_secret, refresh_token, etc.)
+- I lost the previous ChatGPT output due to an accidental refresh.
+
+I will now provide:
+1. The email content (JSON struct and keys)
+2. The current Go source code
+
+What you must do:
+- Use the provided fields and keys so that all declared values are actually used and no unused-variable errors remain.
+- Ensure `generatetoken()` is executed before every `zohocrmdeal()` call.
+- Do not create:
+  - New functions
+  - New files
+  - New logic paths
+- Do not change:
+  - Existing business logic
+  - Function names or signatures
+  - Code structure
+  - Formatting, naming style, or flow
+
+This is company production code.
+Make only the minimum required changes so the code works correctly with the provided fields.
+
+Wait until I share the email content and code, then apply the changes.
