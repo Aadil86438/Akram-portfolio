@@ -1,0 +1,133 @@
+I will paste my existing company production code below.
+
+Your task is to MODIFY the existing logic ONLY.
+Do NOT redesign, refactor, or change coding style.
+Do NOT change function names, file names, or method order.
+
+========================
+BACKGROUND
+========================
+
+- I have a `fetchDataTable` API written in Go.
+- It fetches records from `ckyc_details` table and shows them in frontend using `v-data-table`.
+- Pagination is already implemented and works correctly:
+  - Page 1 → records 1–10
+  - Page 2 → records 11–20
+- Filters, pagination count, and UI rendering are already working fine.
+
+========================
+FRONTEND FLOW
+========================
+
+- Each row has two buttons:
+  1) **Comments**
+     - Opens dialog
+     - Inserts comment into DB using an existing insert API
+     - Table name: `ckyc_comments_log`
+     - While inserting, the selected record `id` is already stored in this table
+
+  2) **View History**
+     - Should show all previously inserted comments for that record
+
+========================
+CURRENT PROBLEM
+========================
+
+- When user clicks **View History**, frontend calls an API every time.
+- If user clicks View History 5 times → API + DB is hit 5 times.
+- This must be completely avoided.
+
+========================
+REQUIRED SOLUTION (MANDATORY)
+========================
+
+- `fetchDataTable` API must fetch ALL required data in a SINGLE API call.
+- While selecting from `ckyc_details`:
+  - INCLUDE `id` column (this is mandatory).
+- Comment history from `ckyc_comments_log` must be fetched INSIDE `fetchDataTable` API itself.
+- Response must already contain comment history mapped to each record using `id`.
+
+- After initial fetch:
+  - When user clicks **View History**:
+    - DO NOT hit API
+    - DO NOT hit DB
+    - ONLY show data already present in frontend memory
+
+========================
+FRONTEND RULES (STRICT)
+========================
+
+- Do NOT use:
+  - async / await
+  - encoder / decoder
+  - payload wrappers
+  - anonymous objects or structs
+- Use:
+  - normal promise syntax
+  - data stored in Vue state
+- View History must ONLY filter and display existing data.
+
+========================
+BACKEND RULES (VERY STRICT)
+========================
+
+- Use ONLY:
+  - `json.Marshal`
+  - `json.Unmarshal`
+  where required
+- Do NOT use encoder / decoder.
+- Do NOT use anonymous structs.
+- All structs must be named.
+- Variable naming rules:
+  - Local variables must start with `l`
+  - Slices / arrays must end with `Arr`
+  - Example:
+    - `var lData string`
+    - `var lRecordArr []SomeStruct`
+
+========================
+LOGGING & STYLE (1000% MANDATORY)
+========================
+
+- Follow existing company logging style EXACTLY:
+  - Entry log
+  - Exit log
+  - Error log
+  - `lErr`
+  - `lErr.Error`
+  - `pDebug`
+  - `lDebug`
+  - `errcode`
+- Maintain:
+  - Same indentation
+  - Same function separation
+  - Same call hierarchy
+  - Same query style
+  - Same order of operations
+- Even a single comma, order, or log sequence must NOT change unless required.
+
+========================
+IMPORTANT NOTES
+========================
+
+- Insert comments API already exists.
+- DO NOT modify insert logic.
+- ONLY optimize fetch logic.
+- Do NOT introduce new APIs.
+- Do NOT introduce caching layers.
+- Do NOT change pagination behavior.
+
+========================
+EXPECTED OUTPUT
+========================
+
+- Updated `fetchDataTable` code
+- `id` included from `ckyc_details`
+- Comment history attached to each record
+- View History works without ANY API call
+- Code must pass senior developer review without objections
+
+I will now paste my existing company code below.
+WAIT for the code.
+DO NOT assume anything.
+DO NOT respond until the code is pasted.
